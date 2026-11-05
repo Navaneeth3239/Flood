@@ -1,0 +1,69 @@
+{
+  "expo": {
+    "name": "FloodWatch Community",
+    "slug": "smart-flood-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0284c7"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.smartflood.community",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Your location is used to pinpoint flood hazards and find nearby alerts.",
+        "NSCameraUsageDescription": "Camera access is used to take photos of flood conditions for responder verification.",
+        "NSPhotoLibraryUsageDescription": "Photo library access is used to select images of flood incidents to assist rescue teams."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0284c7"
+      },
+      "package": "org.smartflood.community",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "POST_NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow FloodWatch to use your location to identify nearby flood hazards and tag incident coordinates."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow FloodWatch to access your photos to attach flood evidence to your report."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#0284c7"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "smart-flood-mobile-id"
+      }
+    }
+  }
+}

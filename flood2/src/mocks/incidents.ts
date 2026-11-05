@@ -1,0 +1,67 @@
+import { Incident } from '@/types';
+
+export const mockIncidents: Incident[] = [
+  {
+    id: 'INC-2026-081',
+    title: 'Severe Waterlogging Under Ring Road Subway',
+    description: 'Stagnant water level estimated at 3.5 feet. Multiple vehicles immobilized. Traffic diversion needed urgently.',
+    location: {
+      latitude: 28.658,
+      longitude: 77.241,
+      address: 'Ring Road underpass near Kashmiri Gate, Delhi',
+    },
+    status: 'verified',
+    priority: 'high',
+    timestamp: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
+    reportedBy: 'Traffic Warden Unit 3',
+    reporterContact: '+91 98110 XXXXX',
+    imageUrl: 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80',
+    source: 'mock',
+  },
+  {
+    id: 'INC-2026-082',
+    title: 'Breach in Local Stormwater Embankment',
+    description: 'Temporary sandbag levee overflowed on the northern canal bank. Water encroaching onto peripheral residential access roads.',
+    location: {
+      latitude: 13.015,
+      longitude: 80.215,
+      address: 'River View Enclave, Kotturpuram, Chennai',
+    },
+    status: 'under_review',
+    priority: 'critical',
+    timestamp: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+    reportedBy: 'Resident Association Secretary',
+    reporterContact: '+91 94441 XXXXX',
+    source: 'mock',
+  },
+  {
+    id: 'INC-2026-083',
+    title: 'Tree Uprooted Obstructing Drainage Culvert',
+    description: 'Large banyan branch dislodged and blocking drainage sluice grating, leading to localized backwater ponding.',
+    location: {
+      latitude: 16.945,
+      longitude: 81.782,
+      address: 'Godavari Bund Road, Rajahmundry',
+    },
+    status: 'verified',
+    priority: 'medium',
+    timestamp: new Date(Date.now() - 180 * 60 * 1000).toISOString(),
+    reportedBy: 'Municipal Field Inspector',
+    source: 'mock',
+  },
+  {
+    id: 'INC-2026-084',
+    title: 'Suspected Damaged Canal Gate Siphon',
+    description: 'Reported rattling noise and uncontrolled flow seepage near secondary regulator gate.',
+    location: {
+      latitude: 11.802,
+      longitude: 77.795,
+      address: 'Mettur West Bank Canal Channel #2',
+    },
+    status: 'unverified',
+    priority: 'low',
+    timestamp: new Date(Date.now() - 240 * 60 * 1000).toISOString(),
+    reportedBy: 'Local Farmer Community',
+    source: 'mock',
+  },
+];
