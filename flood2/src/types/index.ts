@@ -242,6 +242,112 @@ export interface HistoricalReportSummary {
 export type ConnectionState = 'live' | 'reconnecting' | 'offline';
 
 export interface WebSocketMessage {
-  type: 'reading' | 'alert' | 'station_status';
-  payload: any;
+  type: 'reading' | 'alert' | 'station_status' | 'SENSOR_READING_UPDATE' | 'WS_CONNECTED';
+  payload?: any;
+  reading?: any;
+  sensor?: any;
+  risk?: any;
 }
+
+export interface AuthUser {
+  id: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  age?: number;
+  dob?: string;
+  address?: string;
+  role: 'citizen' | 'admin' | 'hydrologist' | string;
+  createdAt?: string;
+}
+
+export interface RegisterPayload {
+  name: string;
+  mail: string; // or email
+  password: string;
+  age: number;
+  dob: string;
+  number: string; // or phone
+  address?: string;
+}
+
+export interface LoginPayload {
+  mail: string; // or email
+  password: string;
+}
+
+export type TerrainLayerType = 'DEM' | 'SRTM30' | 'VEM' | 'TIM';
+
+export interface TerrainLayerItem {
+  id: string;
+  layer_type: TerrainLayerType;
+  name: string;
+  filename: string;
+  filepath: string;
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+  resolution?: string;
+  min_elevation?: number;
+  max_elevation?: number;
+  crs?: string;
+  metadata?: {
+    originalFilename?: string;
+    originalWidth?: number;
+    originalHeight?: number;
+    avgElevation?: number | string;
+    overlayUrl?: string;
+    sampleResolution?: string;
+  };
+  active: boolean;
+  opacity: number;
+  created_at: string;
+}
+
+export interface SoilTypeItem {
+  code: string;
+  name: string;
+  color: string;
+  infiltration_rate_mm_h: number;
+  water_holding_capacity_pct: number;
+  runoff_coefficient: number;
+  flood_risk_factor: string;
+  description: string;
+  properties?: Record<string, any>;
+}
+
+export interface SoilLayerItem {
+  id: string;
+  name: string;
+  soil_type_code: string;
+  geojson: any;
+  active: boolean;
+  opacity: number;
+  soil_name?: string;
+  soil_color?: string;
+  infiltration_rate_mm_h?: number;
+  runoff_coefficient?: number;
+  flood_risk_factor?: string;
+}
+
+export interface StationFloodRiskItem {
+  sensorId: string;
+  locationName: string;
+  latitude: number;
+  longitude: number;
+  elevation: number;
+  soilType: string;
+  waterLevel: number | null;
+  rainfall: number | null;
+  soilMoisture: number | null;
+  riskLevel: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED';
+  riskColor: string;
+  severity: 'normal' | 'moderate' | 'high' | 'critical';
+  label: string;
+  description: string;
+  score: number;
+  factors: { name: string; value: string; trigger: string }[];
+  timestamp: string;
+}
+

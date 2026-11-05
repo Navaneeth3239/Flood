@@ -17,6 +17,7 @@ import {
   Siren,
   Bot,
   Layers,
+  Gamepad2,
 } from 'lucide-react';
 
 export type MapMode = 'standard3d' | 'satellite' | 'tinTerrain' | 'flatView' | 'srtm30';
@@ -34,6 +35,8 @@ export interface DigitalTwinToolbarProps {
   buildingCount: number;
   showAreaInGIS: boolean;
   onToggleAreaInGIS: (val: boolean) => void;
+  showLayersPanel?: boolean;
+  onToggleLayersPanel?: () => void;
   // Analytics & Module Toggles
   showAreaAnalytics: boolean;
   onToggleAreaAnalytics: (val: boolean) => void;
@@ -45,6 +48,8 @@ export interface DigitalTwinToolbarProps {
   onToggleEvacuation: (val: boolean) => void;
   onOpenAIChat: () => void;
   onResetView: () => void;
+  onToggleGameMode?: () => void;
+  onReturnTo2DMap?: () => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
 }
@@ -61,6 +66,8 @@ export const DigitalTwinToolbar: React.FC<DigitalTwinToolbarProps> = ({
   buildingCount,
   showAreaInGIS,
   onToggleAreaInGIS,
+  showLayersPanel,
+  onToggleLayersPanel,
   showAreaAnalytics,
   onToggleAreaAnalytics,
   showFlashFlood,
@@ -71,6 +78,8 @@ export const DigitalTwinToolbar: React.FC<DigitalTwinToolbarProps> = ({
   onToggleEvacuation,
   onOpenAIChat,
   onResetView,
+  onToggleGameMode,
+  onReturnTo2DMap,
   isFullscreen,
   onToggleFullscreen,
 }) => {
@@ -206,6 +215,22 @@ export const DigitalTwinToolbar: React.FC<DigitalTwinToolbarProps> = ({
           <Layers className="w-3.5 h-3.5 text-sky-400" />
           <span>Area in GIS</span>
         </button>
+
+        {/* 3D Layers Panel Toggle (hidden by default in fullscreen) */}
+        {onToggleLayersPanel && (
+          <button
+            onClick={onToggleLayersPanel}
+            title={showLayersPanel ? 'Hide 3D Digital Twin Layers' : 'Show 3D Digital Twin Layers'}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-medium transition-all ${
+              showLayersPanel
+                ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/60 shadow-xs font-semibold'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 text-cyan-400" />
+            <span>GIS Layers</span>
+          </button>
+        )}
       </div>
 
       <div className="h-4 w-px bg-slate-700/60 mx-1 flex-shrink-0" />
@@ -272,6 +297,30 @@ export const DigitalTwinToolbar: React.FC<DigitalTwinToolbarProps> = ({
           <Bot className="w-3.5 h-3.5 text-cyan-400" />
           <span>AI Chat</span>
         </button>
+
+        {/* 2D Area Selector Return Button */}
+        {onReturnTo2DMap && (
+          <button
+            onClick={onReturnTo2DMap}
+            title="Return to 2D Leaflet Map to Select a New Area"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-medium text-cyan-300 bg-cyan-950/60 border border-cyan-500/30 hover:bg-cyan-900/60 transition-all"
+          >
+            <FlatMapIcon className="w-3.5 h-3.5 text-cyan-400" />
+            <span>2D Map</span>
+          </button>
+        )}
+
+        {/* Game Mode Flight & 3D Walking */}
+        {onToggleGameMode && (
+          <button
+            onClick={onToggleGameMode}
+            title="3D Game Flight & Terrain Walk Mode (WASD keyboard + Mouse Look)"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-medium text-amber-300 bg-amber-950/60 border border-amber-500/30 hover:bg-amber-900/60 transition-all"
+          >
+            <Gamepad2 className="w-3.5 h-3.5 text-amber-400" />
+            <span>Game Flight</span>
+          </button>
+        )}
       </div>
 
       <div className="h-4 w-px bg-slate-700/60 mx-1 flex-shrink-0" />

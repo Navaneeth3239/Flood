@@ -272,3 +272,20 @@ When `VITE_USE_MOCK_DATA=false`:
 - Click the language switcher in the top bar and toggle between **EN**, **தமிழ்**, and **हिन्दी**.
 - Verify all navigation links, headers, statuses, and metric cards update to the chosen language.
 - Inspect font rendering to ensure Tamil and Hindi typography renders clearly with proper line heights.
+
+**Important:** the vite should be in the version of Below 7 such as
+Vite 4.x
+Vite 5.x
+Vite 6.x
+Vite 7.x 
+
+**Change vit version:**Code to change the version of your vite into Vit 7.x
+**Uninstalling Vit:**
+```bash
+npm uninstall vite @vitejs/plugin-react
+```
+
+**Installing Vit:**
+```bash
+npm install -D vite@7 @vitejs/plugin-react@4
+```

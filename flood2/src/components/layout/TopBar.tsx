@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Bell, Sun, Moon, Menu, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Bell, Sun, Moon, Menu, ShieldAlert, CheckCircle2, User, LogIn, LogOut } from 'lucide-react';
 import { DemoBadge } from '@/components/common/DemoBadge';
 import { ConnectionStatusIndicator } from '@/components/common/ConnectionStatusIndicator';
 import { LanguageSwitcher } from '@/components/common/LanguageSwitcher';
 import { useTheme } from '@/hooks/useTheme';
+import { useAuth } from '@/context/AuthContext';
 import { apiClient } from '@/api';
 import { Alert } from '@/types';
 import { getSeverityClasses } from '@/utils/formatters';
@@ -17,6 +18,7 @@ interface TopBarProps {
 export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
   const { t } = useTranslation();
   const { theme, toggleTheme } = useTheme();
+  const { user, isAuthenticated, logout, openAuthModal } = useAuth();
   const [activeAlerts, setActiveAlerts] = useState<Alert[]>([]);
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
 
@@ -145,6 +147,34 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar }) => {
         >
           {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
         </button>
+
+        {/* Authentication: Login Button or User Profile Dropdown */}
+        {isAuthenticated && user ? (
+          <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-sky-50 dark:bg-slate-800 border border-sky-200 dark:border-slate-700 text-xs">
+              <User className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[100px]">
+                {user.name || user.phone}
+              </span>
+            </div>
+            <button
+              onClick={logout}
+              title="Sign Out"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+              aria-label="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={openAuthModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-sm shadow-sky-600/30 transition-all cursor-pointer"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>Login</span>
+          </button>
+        )}
       </div>
     </header>
   );

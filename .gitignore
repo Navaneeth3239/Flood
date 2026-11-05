@@ -65,6 +65,12 @@ coverage/
 *.lcov
 .nyc_output
 
+# Uploads
+uploads/
+backend/uploads/
+*.sqlite
+*.db
+
 # Temporary & Cache files
 .cache/
 .parcel-cache/

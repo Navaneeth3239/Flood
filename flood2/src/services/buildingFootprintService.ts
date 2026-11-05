@@ -37,57 +37,111 @@ const CENTER_LNG = 78.312;
  */
 function generateMountainBasinFootprints(): BuildingFootprint[] {
   const footprints: BuildingFootprint[] = [];
-  const TARGET_COUNT = 1849;
+  const TARGET_COUNT = 4850;
 
-  // Define settlement clusters along valley contours
+  // Define settlement clusters across Coimbatore Basin, Nilgiri Foothills, Garhwal Valley, and Chennai
   const clusters = [
-    // 1. Riverbank town center & market district (dense, multi-story)
+    // --- Coimbatore Monitoring Area & Noyyal River Corridor ---
     {
+      name: 'Coimbatore Urban Center & River Terraces',
+      baseLat: 11.0168,
+      baseLng: 76.9558,
+      spreadLat: 0.025,
+      spreadLng: 0.030,
+      count: 950,
+      baseHeight: 14.5,
+      heightVar: 8.0,
+      elevation: 411,
+      riskBias: 0.35,
+    },
+    {
+      name: 'Singanallur Wetland & Lake Basin Settlement',
+      baseLat: 10.9982,
+      baseLng: 77.0125,
+      spreadLat: 0.018,
+      spreadLng: 0.022,
+      count: 650,
+      baseHeight: 9.5,
+      heightVar: 4.5,
+      elevation: 402,
+      riskBias: 0.55,
+    },
+    // --- Siruvani Mountain Gorge & Western Ghat Foothills ---
+    {
+      name: 'Siruvani Mountain Gorge Settlement',
+      baseLat: 10.9382,
+      baseLng: 76.6854,
+      spreadLat: 0.018,
+      spreadLng: 0.018,
+      count: 480,
+      baseHeight: 7.5,
+      heightVar: 3.5,
+      elevation: 865,
+      riskBias: 0.25,
+    },
+    // --- Pilloor Dam Valley & Upper Bhavani Gorge ---
+    {
+      name: 'Pilloor Reservoir Valley & Hillside Village',
+      baseLat: 11.1985,
+      baseLng: 76.8124,
+      spreadLat: 0.020,
+      spreadLng: 0.016,
+      count: 450,
+      baseHeight: 8.0,
+      heightVar: 4.0,
+      elevation: 540,
+      riskBias: 0.40,
+    },
+    // --- Bhavani River Confluence & Floodplain ---
+    {
+      name: 'Bhavani River Delta & Confluence Towns',
+      baseLat: 11.3142,
+      baseLng: 76.9821,
+      spreadLat: 0.022,
+      spreadLng: 0.025,
+      count: 520,
+      baseHeight: 10.0,
+      heightVar: 5.0,
+      elevation: 295,
+      riskBias: 0.50,
+    },
+    // --- Garhwal Mountain Valley (Mandakini / Alaknanda Gorge) ---
+    {
+      name: 'Riverbank Town Center & Temple District',
       baseLat: 30.135,
       baseLng: 78.308,
       spreadLat: 0.016,
       spreadLng: 0.012,
-      count: 720,
+      count: 600,
       baseHeight: 11.5,
       heightVar: 5.5,
       elevation: 358,
       riskBias: 0.45,
     },
-    // 2. North riverbank hillside terrace settlement
     {
+      name: 'Hillside Terraced Hamlets',
       baseLat: 30.146,
       baseLng: 78.318,
       spreadLat: 0.018,
       spreadLng: 0.014,
-      count: 480,
+      count: 450,
       baseHeight: 8.0,
       heightVar: 4.0,
       elevation: 410,
       riskBias: 0.20,
     },
-    // 3. Upstream canyon bend village & temple complex
+    // --- Chennai Coastal River Corridor (Adyar / Cooum) ---
     {
-      baseLat: 30.125,
-      baseLng: 78.300,
-      spreadLat: 0.012,
-      spreadLng: 0.010,
-      count: 360,
-      baseHeight: 7.5,
-      heightVar: 3.5,
-      elevation: 385,
-      riskBias: 0.35,
-    },
-    // 4. Hillside terraced hamlets & foothill structures
-    {
-      baseLat: 30.152,
-      baseLng: 78.330,
-      spreadLat: 0.015,
-      spreadLng: 0.016,
-      count: 289,
-      baseHeight: 6.5,
-      heightVar: 3.0,
-      elevation: 490,
-      riskBias: 0.08,
+      name: 'Chennai Coastal Riverbanks',
+      baseLat: 13.015,
+      baseLng: 80.215,
+      spreadLat: 0.020,
+      spreadLng: 0.020,
+      count: 750,
+      baseHeight: 16.0,
+      heightVar: 9.0,
+      elevation: 12,
+      riskBias: 0.60,
     },
   ];
 

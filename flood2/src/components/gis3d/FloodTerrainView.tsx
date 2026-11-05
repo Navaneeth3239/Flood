@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import * as Cesium from 'cesium';
-import { Station, Reading } from '@/types';
+import { Station, Reading, TerrainLayerItem, SoilLayerItem } from '@/types';
 import { LayerVisibilityState } from './LayerControlPanel';
 import { MapMode } from './DigitalTwinToolbar';
 import { BuildingFootprint } from '@/services/buildingFootprintService';
+import { SelectedAreaBounds } from './LeafletAreaSelector';
 import {
   createStationPinDataUri,
   flyCameraToLocation,
@@ -12,7 +13,6 @@ import {
   OBSERVED_FLOOD_EXTENT_GEOJSON,
   EMERGENCY_INFRASTRUCTURE,
 } from '@/services/floodLayerService';
-import { GNN_PREDICTED_RISK_ZONES_GEOJSON } from '@/services/predictionService';
 import {
   MOUNTAIN_WATERWAYS_GEOJSON,
   MOUNTAIN_ROADS_GEOJSON,
@@ -35,6 +35,10 @@ export interface CameraActionHandle {
   resetNorth: () => void;
   resetPitch: () => void;
   resetHome: () => void;
+  flyDroneMode: () => void;
+  groundWalkMode: () => void;
+  toggleCanyonOrbit: () => void;
+  toggleGameControls: () => void;
 }
 
 interface SelectedLocation {
@@ -66,6 +70,25 @@ interface FloodTerrainViewProps {
   onCoordinatesChange: (coords: { lat: number; lng: number; elevation: number | null } | null) => void;
   onCameraStateChange: (state: { altitude: number; pitch: number; heading: number }) => void;
   onResetTrigger?: number;
+  // Uploaded Terrain Layers & Opacities
+  uploadedLayers?: TerrainLayerItem[];
+  layerOpacities?: Record<string, number>;
+  soilLayers?: SoilLayerItem[];
+  selectedAreaBounds?: SelectedAreaBounds | null;
+  onReturnTo2D?: () => void;
+  mqttStatus?: {
+    connected: boolean;
+    port: number;
+    messageCount: number;
+    lastTopic?: string;
+  };
+  onMapClick?: (info: {
+    lat: number;
+    lng: number;
+    elevation: number | null;
+    layerName: string;
+    soilType?: string;
+  }) => void;
 }
 
 export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewProps>(
@@ -89,6 +112,13 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
       onCoordinatesChange,
       onCameraStateChange,
       onResetTrigger = 0,
+      uploadedLayers = [],
+      layerOpacities = {},
+      soilLayers = [],
+      selectedAreaBounds,
+      onReturnTo2D,
+      mqttStatus,
+      onMapClick,
     },
     ref
   ) => {
@@ -99,44 +129,51 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
     const buildingsDataSourceRef = useRef<Cesium.CustomDataSource | null>(null);
     const mountainGisDataSourceRef = useRef<Cesium.CustomDataSource | null>(null);
     const vectorDataSourceRef = useRef<Cesium.CustomDataSource | null>(null);
+    const soilDataSourceRef = useRef<Cesium.CustomDataSource | null>(null);
+
+    // Map to hold dynamic uploaded raster imagery layers
+    const rasterLayersMapRef = useRef<Map<string, Cesium.ImageryLayer>>(new Map());
 
     const [viewerReady, setViewerReady] = useState(false);
+    const [canyonOrbitActive, setCanyonOrbitActive] = useState(false);
+    const canyonOrbitRef = useRef(false);
+    const [gameControlsActive, setGameControlsActive] = useState(true);
 
-    // Expose camera action handles to parent / UI controls
+    // Expose camera movement actions to parent component
     useImperativeHandle(ref, () => ({
       moveForward: () => {
         const v = viewerRef.current;
         if (!v || v.isDestroyed()) return;
         const alt = v.camera.positionCartographic.height;
-        v.camera.moveForward(Math.max(100, alt * 0.15));
+        v.camera.moveForward(Math.max(150, alt * 0.25));
       },
       moveBackward: () => {
         const v = viewerRef.current;
         if (!v || v.isDestroyed()) return;
         const alt = v.camera.positionCartographic.height;
-        v.camera.moveBackward(Math.max(100, alt * 0.15));
+        v.camera.moveBackward(Math.max(150, alt * 0.25));
       },
       moveLeft: () => {
         const v = viewerRef.current;
         if (!v || v.isDestroyed()) return;
         const alt = v.camera.positionCartographic.height;
-        v.camera.moveLeft(Math.max(80, alt * 0.12));
+        v.camera.moveLeft(Math.max(150, alt * 0.25));
       },
       moveRight: () => {
         const v = viewerRef.current;
         if (!v || v.isDestroyed()) return;
         const alt = v.camera.positionCartographic.height;
-        v.camera.moveRight(Math.max(80, alt * 0.12));
+        v.camera.moveRight(Math.max(150, alt * 0.25));
       },
       turnLeft: () => {
         const v = viewerRef.current;
         if (!v || v.isDestroyed()) return;
-        v.camera.lookLeft(Cesium.Math.toRadians(12));
+        v.camera.lookLeft(Cesium.Math.toRadians(15));
       },
       turnRight: () => {
         const v = viewerRef.current;
         if (!v || v.isDestroyed()) return;
-        v.camera.lookRight(Cesium.Math.toRadians(12));
+        v.camera.lookRight(Cesium.Math.toRadians(15));
       },
       tiltUp: () => {
         const v = viewerRef.current;
@@ -205,6 +242,39 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
         if (!v || v.isDestroyed()) return;
         flyCameraToLocation(v, selectedLocation.lat, selectedLocation.lng, 2850, -34, 38, 1.2);
       },
+      flyDroneMode: () => {
+        const v = viewerRef.current;
+        if (!v || v.isDestroyed()) return;
+        v.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(selectedLocation.lng, selectedLocation.lat - 0.008, 420),
+          orientation: {
+            heading: Cesium.Math.toRadians(12),
+            pitch: Cesium.Math.toRadians(-24),
+            roll: 0,
+          },
+          duration: 1.5,
+        });
+      },
+      groundWalkMode: () => {
+        const v = viewerRef.current;
+        if (!v || v.isDestroyed()) return;
+        v.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(selectedLocation.lng, selectedLocation.lat - 0.002, 35),
+          orientation: {
+            heading: Cesium.Math.toRadians(0),
+            pitch: Cesium.Math.toRadians(-5),
+            roll: 0,
+          },
+          duration: 1.5,
+        });
+      },
+      toggleCanyonOrbit: () => {
+        canyonOrbitRef.current = !canyonOrbitRef.current;
+        setCanyonOrbitActive(canyonOrbitRef.current);
+      },
+      toggleGameControls: () => {
+        setGameControlsActive((prev) => !prev);
+      },
     }));
 
     // Initialize Cesium Viewer once
@@ -212,7 +282,10 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
       if (!containerRef.current) return;
 
       // Configure Cesium Ion Access Token if provided in environment
-      const ionToken = import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN;
+      const ionToken =
+        import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN ||
+        import.meta.env.CESIUM_ION_TOKEN;
+
       if (ionToken && ionToken.trim().length > 0) {
         Cesium.Ion.defaultAccessToken = ionToken.trim();
       }
@@ -243,42 +316,65 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
           scene3DOnly: true,
         });
 
-        // Optimize visual quality and performance
-        viewer.scene.globe.enableLighting = false;
+        // Optimize visual quality and realistic game graphics
+        viewer.scene.globe.enableLighting = true; // Dynamic Sun direction & mountain shadows
+        viewer.shadows = true;
+        viewer.scene.highDynamicRange = true;
+        viewer.scene.fog.enabled = true;
+        viewer.scene.fog.density = 0.00015;
+        if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = true;
         viewer.scene.globe.depthTestAgainstTerrain = true;
-        viewer.scene.screenSpaceCameraController.minimumZoomDistance = 150;
+        viewer.scene.screenSpaceCameraController.minimumZoomDistance = 5;
         viewer.scene.screenSpaceCameraController.maximumZoomDistance = 2500000;
-        viewer.scene.verticalExaggeration = terrainExaggeration;
+        viewer.scene.verticalExaggeration = Math.max(1.5, terrainExaggeration);
 
         // Custom DataSources for high performance batched rendering
         const buildingsDS = new Cesium.CustomDataSource('buildingsDS');
         const mountainGisDS = new Cesium.CustomDataSource('mountainGisDS');
         const vectorDS = new Cesium.CustomDataSource('vectorDS');
+        const soilDS = new Cesium.CustomDataSource('soilDS');
 
         viewer.dataSources.add(buildingsDS);
         viewer.dataSources.add(mountainGisDS);
         viewer.dataSources.add(vectorDS);
+        viewer.dataSources.add(soilDS);
 
         buildingsDataSourceRef.current = buildingsDS;
         mountainGisDataSourceRef.current = mountainGisDS;
         vectorDataSourceRef.current = vectorDS;
+        soilDataSourceRef.current = soilDS;
 
-        // Attempt to load Cesium World Terrain asynchronously if token is present
-        if (ionToken) {
-          Cesium.createWorldTerrainAsync()
-            .then((terrainProvider) => {
-              if (!viewer.isDestroyed()) {
-                viewer.terrainProvider = terrainProvider;
-              }
-            })
-            .catch(() => {
-              if (!viewer.isDestroyed()) {
-                viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
-              }
-            });
-        } else {
-          viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
-        }
+        // Load Real High-Resolution 3D Terrain everywhere on Earth
+        Cesium.ArcGISTiledElevationTerrainProvider.fromUrl(
+          'https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer'
+        )
+          .then((agTerrain) => {
+            if (!viewer.isDestroyed()) {
+              viewer.terrainProvider = agTerrain;
+            }
+          })
+          .catch(() => {
+            if (ionToken) {
+              Cesium.createWorldTerrainAsync()
+                .then((tp) => {
+                  if (!viewer.isDestroyed()) viewer.terrainProvider = tp;
+                })
+                .catch(() => {
+                  if (!viewer.isDestroyed()) viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+                });
+            } else {
+              if (!viewer.isDestroyed()) viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+            }
+          });
+
+        // Load Global Cesium OSM 3D Buildings
+        Cesium.createOsmBuildingsAsync()
+          .then((osmBlds) => {
+            if (!viewer.isDestroyed()) {
+              viewer.scene.primitives.add(osmBlds);
+            }
+          })
+          .catch(() => {});
 
         viewerRef.current = viewer;
 
@@ -311,9 +407,11 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
           }
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
-        // Left Click Event: Pick Station or 3D Building
+        // Left Click Event: Pick Station, Building, or Ground Location
         handler.setInputAction((click: any) => {
           if (!viewer || viewer.isDestroyed()) return;
+
+          // 1. Check if user clicked an entity (Station pin, Building footprint, Soil zone)
           const pickedObject = viewer.scene.pick(click.position);
           if (Cesium.defined(pickedObject) && pickedObject.id) {
             const entity = pickedObject.id as Cesium.Entity;
@@ -322,14 +420,46 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
             if (entity.properties && entity.properties.hasProperty('stationData')) {
               const stn = entity.properties.stationData.getValue();
               onSelectStation(stn);
-              return;
             }
 
             // Picked building footprint
             if (entity.properties && entity.properties.hasProperty('buildingData')) {
               const bld = entity.properties.buildingData.getValue();
               onSelectBuilding(bld);
-              return;
+            }
+          }
+
+          // 2. Extract precise ground coordinates & elevation on click
+          const ray = viewer.camera.getPickRay(click.position);
+          if (ray) {
+            const position = viewer.scene.globe.pick(ray, viewer.scene);
+            if (position) {
+              const carto = Cesium.Cartographic.fromCartesian(position);
+              const lat = Cesium.Math.toDegrees(carto.latitude);
+              const lng = Cesium.Math.toDegrees(carto.longitude);
+              const elevation = carto.height;
+
+              // Check if point falls within Clay soil formation
+              const inClay = lat >= 10.95 && lat <= 11.12 && lng >= 76.85 && lng <= 77.15;
+              const soilType = inClay ? 'Clay (Infiltration: 1.5 mm/h, Runoff: 0.78)' : undefined;
+
+              const activeLayerName = layers.demElevation
+                ? 'DEM Elevation'
+                : layers.srtm30
+                ? 'SRTM 30m'
+                : layers.vem
+                ? 'VEM Layer'
+                : layers.tim
+                ? 'TIM Layer'
+                : '3D World Terrain';
+
+              onMapClick?.({
+                lat,
+                lng,
+                elevation,
+                layerName: activeLayerName,
+                soilType,
+              });
             }
           }
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
@@ -361,7 +491,7 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
       }
     }, []);
 
-    // 1. Render 3D Extruded Building Footprints (Orange #F97316 fill, #EA580C outline)
+    // 1. Render 3D Extruded Building Footprints
     useEffect(() => {
       const ds = buildingsDataSourceRef.current;
       if (!ds || !viewerReady) return;
@@ -372,6 +502,31 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
         const flatCoords = b.polygon.flatMap(([lng, lat]) => [lng, lat]);
         const isSelected = selectedBuilding?.id === b.id;
 
+        // Realistic architectural game colors
+        let wallColor = '#E28D5C'; // Residential Terracotta
+        let outlineCol = '#C2410C';
+
+        if (b.occupancyType === 'Commercial') {
+          wallColor = '#38BDF8'; // Cyan glass facade
+          outlineCol = '#0284C7';
+        } else if (b.occupancyType === 'Public Infrastructure') {
+          wallColor = '#10B981'; // Emerald safety
+          outlineCol = '#059669';
+        } else if (b.occupancyType === 'Storage/Auxiliary') {
+          wallColor = '#94A3B8'; // Gunmetal steel
+          outlineCol = '#475569';
+        }
+
+        if (b.floodRiskTier === 'danger' || b.floodRiskTier === 'warning') {
+          wallColor = '#EF4444'; // Flood hazard
+          outlineCol = '#DC2626';
+        }
+
+        if (isSelected) {
+          wallColor = '#00F0FF';
+          outlineCol = '#FFFFFF';
+        }
+
         ds.entities.add({
           id: `bld-${b.id}`,
           name: b.name,
@@ -379,14 +534,10 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
             hierarchy: Cesium.Cartesian3.fromDegreesArray(flatCoords),
             height: 0,
             extrudedHeight: b.heightMeters,
-            material: isSelected
-              ? Cesium.Color.fromCssColorString('#00F0FF')
-              : Cesium.Color.fromCssColorString('#F97316'), // Vivid orange
+            material: Cesium.Color.fromCssColorString(wallColor).withAlpha(0.92),
             outline: true,
-            outlineColor: isSelected
-              ? Cesium.Color.WHITE
-              : Cesium.Color.fromCssColorString('#EA580C'), // Darker orange outline
-            outlineWidth: 1.5,
+            outlineColor: Cesium.Color.fromCssColorString(outlineCol),
+            outlineWidth: 2,
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
             extrudedHeightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
           },
@@ -398,7 +549,7 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
       });
     }, [buildings, selectedBuilding, showBuildings, viewerReady]);
 
-    // 2. Render Mountain GIS Data (Cyan Rivers, Roads & Paths, Marked Area Boundary)
+    // 2. Render Mountain GIS Data (Cyan Rivers, Roads, Marked Area)
     useEffect(() => {
       const ds = mountainGisDataSourceRef.current;
       if (!ds || !viewerReady) return;
@@ -406,6 +557,31 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
       ds.entities.removeAll();
 
       // Marked Study Area Boundary Polygon
+      if (selectedAreaBounds) {
+        ds.entities.add({
+          id: 'selected-study-area-boundary',
+          name: selectedAreaBounds.name,
+          polygon: {
+            hierarchy: Cesium.Cartesian3.fromDegreesArray([
+              selectedAreaBounds.minLng,
+              selectedAreaBounds.minLat,
+              selectedAreaBounds.minLng,
+              selectedAreaBounds.maxLat,
+              selectedAreaBounds.maxLng,
+              selectedAreaBounds.maxLat,
+              selectedAreaBounds.maxLng,
+              selectedAreaBounds.minLat,
+            ]),
+            material: Cesium.Color.fromCssColorString('#00F0FF').withAlpha(0.14),
+            outline: true,
+            outlineColor: Cesium.Color.fromCssColorString('#00F0FF'),
+            outlineWidth: 3.5,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          },
+          show: true,
+        });
+      }
+
       MARKED_STUDY_AREA_GEOJSON.features.forEach((feat: any) => {
         const ring = feat.geometry.coordinates[0];
         const degreesArray = ring.flatMap(([lng, lat]: [number, number]) => [lng, lat]);
@@ -425,7 +601,7 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
         });
       });
 
-      // Cyan River & Waterway Overlays (18 features)
+      // Cyan River & Waterway Overlays
       MOUNTAIN_WATERWAYS_GEOJSON.features.forEach((feat: any, idx) => {
         const coords = feat.geometry.coordinates;
         const positions = coords.flatMap(([lng, lat]: [number, number]) => [lng, lat, 0]);
@@ -443,7 +619,7 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
         });
       });
 
-      // Roads & Mountain Paths (142 features)
+      // Roads & Mountain Paths
       MOUNTAIN_ROADS_GEOJSON.features.forEach((feat: any, idx) => {
         const coords = feat.geometry.coordinates;
         const positions = coords.flatMap(([lng, lat]: [number, number]) => [lng, lat, 0]);
@@ -462,7 +638,39 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
       });
     }, [showRivers, showPaths, showAreaInGIS, viewerReady]);
 
-    // 3. Render Stations, Sentinel-1 Inundation, Risk Zones & Shelters
+    // 3. Render Soil Classification Layer (Clay prioritized in Amber #D97706)
+    useEffect(() => {
+      const ds = soilDataSourceRef.current;
+      if (!ds || !viewerReady) return;
+
+      ds.entities.removeAll();
+
+      // Clay Soil Formation Area
+      const clayZoneCoords = [
+        76.880, 10.960,
+        77.080, 10.960,
+        77.120, 11.080,
+        76.920, 11.090,
+        76.880, 10.960,
+      ];
+
+      ds.entities.add({
+        id: 'soil-layer-clay-zone',
+        name: 'Coimbatore Valley Heavy Clay Formation',
+        polygon: {
+          hierarchy: Cesium.Cartesian3.fromDegreesArray(clayZoneCoords),
+          material: Cesium.Color.fromCssColorString('#D97706').withAlpha(0.38),
+          outline: true,
+          outlineColor: Cesium.Color.fromCssColorString('#B45309'),
+          outlineWidth: 2.5,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        },
+        description: 'Clay Soil formation: Low infiltration (1.5 mm/h), high runoff coefficient (0.78).',
+        show: layers.soilType,
+      });
+    }, [layers.soilType, soilLayers, viewerReady]);
+
+    // 4. Render IoT Stations with 4 Risk Levels (GREEN, YELLOW, ORANGE, RED)
     useEffect(() => {
       const ds = vectorDataSourceRef.current;
       if (!ds || !viewerReady) return;
@@ -479,15 +687,37 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
       // IoT Gauging Stations
       stations.forEach((stn) => {
         const reading = latestReadingsMap.get(stn.id);
+        const wl = reading?.waterLevel ?? 0;
+        const rf = reading?.rainfall ?? 0;
+        const sm = reading?.soilMoisture ?? 0;
+        const isClay = ((stn as any).soil_type || 'Clay').toLowerCase() === 'clay';
+
         let severity: 'normal' | 'watch' | 'warning' | 'danger' | 'unknown' = 'normal';
+        let riskColorHex = '#10B981';
+
         if (stn.status === 'offline') {
           severity = 'unknown';
-        } else if (reading?.waterLevel && reading.waterLevel >= stn.thresholds.dangerMax) {
+          riskColorHex = '#6B7280';
+        } else if (
+          wl >= stn.thresholds.dangerMax ||
+          (wl >= stn.thresholds.warningMax && rf >= 50 && sm >= 80)
+        ) {
           severity = 'danger';
-        } else if (reading?.waterLevel && reading.waterLevel >= stn.thresholds.warningMax) {
+          riskColorHex = '#EF4444'; // RED
+        } else if (
+          wl >= stn.thresholds.warningMax ||
+          (wl >= stn.thresholds.watchMax && rf >= 35 && sm >= 70) ||
+          (isClay && sm >= 85 && rf >= 30)
+        ) {
           severity = 'warning';
-        } else if (reading?.waterLevel && reading.waterLevel >= stn.thresholds.watchMax) {
+          riskColorHex = '#F97316'; // ORANGE
+        } else if (
+          wl >= stn.thresholds.watchMax ||
+          (wl >= stn.thresholds.normalMax && (rf >= 20 || sm >= 60)) ||
+          rf >= 30
+        ) {
           severity = 'watch';
+          riskColorHex = '#EAB308'; // YELLOW
         }
 
         const isSelected = selectedStation?.id === stn.id;
@@ -501,7 +731,7 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
             image: pinUri,
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-            scale: isSelected ? 1.15 : 0.9,
+            scale: isSelected ? 1.2 : 0.95,
             disableDepthTestDistance: 500000,
           },
           label: {
@@ -520,12 +750,13 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
           properties: new Cesium.PropertyBag({
             stationData: stn,
             severity,
+            riskColorHex,
           }),
           show: layers.stations,
         });
       });
 
-      // Observed SAR Inundation
+      // Observed Flood Extent
       OBSERVED_FLOOD_EXTENT_GEOJSON.features.forEach((feat: any, idx) => {
         const ring = feat.geometry.coordinates[0];
         const degreesArray = ring.flatMap(([lng, lat]: [number, number]) => [lng, lat]);
@@ -541,32 +772,7 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
             outlineWidth: 2,
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           },
-          show: layers.sarObservedFlood,
-        });
-      });
-
-      // GNN Risk Zones
-      GNN_PREDICTED_RISK_ZONES_GEOJSON.features.forEach((feat: any, idx) => {
-        const ring = feat.geometry.coordinates[0];
-        const degreesArray = ring.flatMap(([lng, lat]: [number, number]) => [lng, lat]);
-        const isDanger = feat.properties.riskLevel === 'danger';
-
-        ds.entities.add({
-          id: `gnn-${idx}`,
-          name: feat.properties.name,
-          polygon: {
-            hierarchy: Cesium.Cartesian3.fromDegreesArray(degreesArray),
-            material: isDanger
-              ? Cesium.Color.fromCssColorString('#EF4444').withAlpha(0.42)
-              : Cesium.Color.fromCssColorString('#F97316').withAlpha(0.42),
-            outline: true,
-            outlineColor: isDanger
-              ? Cesium.Color.fromCssColorString('#DC2626')
-              : Cesium.Color.fromCssColorString('#EA580C'),
-            outlineWidth: 2.5,
-            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          },
-          show: layers.gnnPredictedRisk,
+          show: layers.floodExtent,
         });
       });
 
@@ -597,12 +803,66 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
             disableDepthTestDistance: 500000,
             scale: 0.85,
           },
-          show: layers.emergencyShelters,
+          show: true,
         });
       });
     }, [stations, readings, selectedStation, layers, viewerReady]);
 
-    // Handle Map Mode changes (Flat View, Standard 3D, TIN Terrain, SRTM 30)
+    // 5. Dynamic Uploaded Elevation Rasters (DEM, SRTM 30, VEM, TIM)
+    useEffect(() => {
+      const viewer = viewerRef.current;
+      if (!viewer || viewer.isDestroyed() || !viewerReady) return;
+
+      const layerMap = rasterLayersMapRef.current;
+
+      uploadedLayers.forEach((layer) => {
+        const shouldShow =
+          layer.active &&
+          ((layer.layer_type === 'DEM' && layers.demElevation) ||
+            (layer.layer_type === 'SRTM30' && layers.srtm30) ||
+            (layer.layer_type === 'VEM' && layers.vem) ||
+            (layer.layer_type === 'TIM' && layers.tim));
+
+        const targetOpacity = layerOpacities[layer.id] ?? layer.opacity ?? 0.8;
+
+        if (shouldShow && layer.metadata?.overlayUrl) {
+          if (!layerMap.has(layer.id)) {
+            const overlayUrl = layer.metadata.overlayUrl.startsWith('http')
+              ? layer.metadata.overlayUrl
+              : `http://localhost:8000${layer.metadata.overlayUrl}`;
+
+            const provider = new Cesium.SingleTileImageryProvider({
+              url: overlayUrl,
+              rectangle: Cesium.Rectangle.fromDegrees(
+                layer.west,
+                layer.south,
+                layer.east,
+                layer.north
+              ),
+            });
+
+            const imageryLayer = viewer.imageryLayers.addImageryProvider(provider);
+            imageryLayer.alpha = targetOpacity;
+            layerMap.set(layer.id, imageryLayer);
+          } else {
+            const existingLayer = layerMap.get(layer.id);
+            if (existingLayer) {
+              existingLayer.show = true;
+              existingLayer.alpha = targetOpacity;
+            }
+          }
+        } else {
+          if (layerMap.has(layer.id)) {
+            const existingLayer = layerMap.get(layer.id);
+            if (existingLayer) {
+              existingLayer.show = false;
+            }
+          }
+        }
+      });
+    }, [uploadedLayers, layers, layerOpacities, viewerReady]);
+
+    // 6. Camera Resets and Elevation Exaggeration
     useEffect(() => {
       const viewer = viewerRef.current;
       if (!viewer || viewer.isDestroyed() || !viewerReady) return;
@@ -616,25 +876,11 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
             pitch: Cesium.Math.toRadians(-89.9),
             roll: 0,
           },
-          duration: 1.2,
+          duration: 1.0,
         });
-      } else if (mapMode === 'standard3d' || mapMode === 'satellite') {
-        if (viewer.camera.pitch < Cesium.Math.toRadians(-70)) {
-          const carto = viewer.camera.positionCartographic;
-          viewer.camera.flyTo({
-            destination: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, Math.max(2800, carto.height)),
-            orientation: {
-              heading: Cesium.Math.toRadians(38),
-              pitch: Cesium.Math.toRadians(-34),
-              roll: 0,
-            },
-            duration: 1.2,
-          });
-        }
       }
     }, [mapMode, viewerReady]);
 
-    // Handle external Reset button trigger
     useEffect(() => {
       if (onResetTrigger === 0) return;
       const viewer = viewerRef.current;
@@ -651,16 +897,219 @@ export const FloodTerrainView = forwardRef<CameraActionHandle, FloodTerrainViewP
       );
     }, [onResetTrigger]);
 
-    // Update terrain exaggeration
     useEffect(() => {
       const viewer = viewerRef.current;
       if (!viewer || viewer.isDestroyed()) return;
       viewer.scene.verticalExaggeration = terrainExaggeration;
     }, [terrainExaggeration]);
 
+    // Cinematic camera flight directly into selected geographical bounds
+    useEffect(() => {
+      const v = viewerRef.current;
+      if (!v || v.isDestroyed() || !viewerReady || !selectedAreaBounds) return;
+
+      const alt = Math.max(1200, Math.min(8000, Math.sqrt(selectedAreaBounds.areaSqKm) * 260));
+
+      v.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(
+          selectedAreaBounds.centerLng,
+          selectedAreaBounds.centerLat - (alt / 111000) * 0.45,
+          alt
+        ),
+        orientation: {
+          heading: Cesium.Math.toRadians(24),
+          pitch: Cesium.Math.toRadians(-32),
+          roll: 0,
+        },
+        duration: 2.2,
+      });
+    }, [selectedAreaBounds, viewerReady]);
+
+    // 7. Full Game Keyboard Movement (WASD + Space + C + Shift)
+    useEffect(() => {
+      const activeKeys = new Set<string>();
+      let animId: number;
+
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
+        if (
+          [
+            'KeyW',
+            'KeyS',
+            'KeyA',
+            'KeyD',
+            'Space',
+            'KeyC',
+            'KeyE',
+            'KeyQ',
+            'ShiftLeft',
+            'ShiftRight',
+            'ArrowUp',
+            'ArrowDown',
+            'ArrowLeft',
+            'ArrowRight',
+          ].includes(e.code)
+        ) {
+          activeKeys.add(e.code);
+        }
+      };
+
+      const onKeyUp = (e: KeyboardEvent) => {
+        activeKeys.delete(e.code);
+      };
+
+      window.addEventListener('keydown', onKeyDown);
+      window.addEventListener('keyup', onKeyUp);
+
+      const gameLoop = () => {
+        const v = viewerRef.current;
+        if (v && !v.isDestroyed() && activeKeys.size > 0 && gameControlsActive) {
+          const isBoost = activeKeys.has('ShiftLeft') || activeKeys.has('ShiftRight');
+          const alt = Math.max(15, v.camera.positionCartographic.height);
+          const baseStep = Math.max(6, alt * 0.035);
+          const step = isBoost ? baseStep * 2.8 : baseStep;
+
+          if (activeKeys.has('KeyW') || activeKeys.has('ArrowUp')) v.camera.moveForward(step);
+          if (activeKeys.has('KeyS') || activeKeys.has('ArrowDown')) v.camera.moveBackward(step);
+          if (activeKeys.has('KeyA')) v.camera.moveLeft(step);
+          if (activeKeys.has('KeyD')) v.camera.moveRight(step);
+          if (activeKeys.has('Space') || activeKeys.has('KeyE')) v.camera.moveUp(step * 0.7);
+          if (activeKeys.has('KeyC') || activeKeys.has('KeyQ')) v.camera.moveDown(step * 0.7);
+          if (activeKeys.has('ArrowLeft')) v.camera.lookLeft(Cesium.Math.toRadians(1.5));
+          if (activeKeys.has('ArrowRight')) v.camera.lookRight(Cesium.Math.toRadians(1.5));
+        }
+
+        if (canyonOrbitRef.current && viewerRef.current && !viewerRef.current.isDestroyed()) {
+          viewerRef.current.camera.rotate(Cesium.Cartesian3.UNIT_Z, 0.002);
+        }
+
+        animId = requestAnimationFrame(gameLoop);
+      };
+
+      animId = requestAnimationFrame(gameLoop);
+
+      return () => {
+        window.removeEventListener('keydown', onKeyDown);
+        window.removeEventListener('keyup', onKeyUp);
+        cancelAnimationFrame(animId);
+      };
+    }, [gameControlsActive]);
+
     return (
-      <div className="w-full h-full relative">
+      <div className="w-full h-full relative overflow-hidden">
         <div ref={containerRef} className="w-full h-full" />
+
+        {/* Game Reticle / Crosshair */}
+        {gameControlsActive && (
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div className="relative w-8 h-8 opacity-40">
+              <div className="absolute top-1/2 left-0 right-0 h-[1.5px] bg-cyan-400 -translate-y-1/2 shadow-sm shadow-cyan-400" />
+              <div className="absolute left-1/2 top-0 bottom-0 w-[1.5px] bg-cyan-400 -translate-x-1/2 shadow-sm shadow-cyan-400" />
+              <div className="absolute inset-1 rounded-full border border-cyan-400/40" />
+            </div>
+          </div>
+        )}
+
+        {/* Top-Center Game Flight Bar & Camera Presets */}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-[#0B132B]/90 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-cyan-500/30 shadow-2xl text-[11px] select-none text-slate-200">
+          <span className="flex items-center gap-1 font-bold text-cyan-400 mr-1">
+            🎮 <span>Game Flight</span>
+          </span>
+
+          <button
+            onClick={() => {
+              const v = viewerRef.current;
+              if (v && !v.isDestroyed()) {
+                v.camera.flyTo({
+                  destination: Cesium.Cartesian3.fromDegrees(selectedLocation.lng, selectedLocation.lat - 0.009, 380),
+                  orientation: { heading: Cesium.Math.toRadians(10), pitch: Cesium.Math.toRadians(-22), roll: 0 },
+                  duration: 1.2,
+                });
+              }
+            }}
+            title="Drone Follow Camera: Low altitude 350m angled game perspective"
+            className="px-2 py-1 rounded-xl bg-slate-800/90 hover:bg-cyan-500 hover:text-slate-950 transition-all font-semibold"
+          >
+            Drone Cam
+          </button>
+
+          <button
+            onClick={() => {
+              const v = viewerRef.current;
+              if (v && !v.isDestroyed()) {
+                v.camera.flyTo({
+                  destination: Cesium.Cartesian3.fromDegrees(selectedLocation.lng, selectedLocation.lat - 0.0018, 30),
+                  orientation: { heading: Cesium.Math.toRadians(0), pitch: Cesium.Math.toRadians(-4), roll: 0 },
+                  duration: 1.2,
+                });
+              }
+            }}
+            title="Ground Walk Camera: Ground level street / riverbank perspective (20m altitude)"
+            className="px-2 py-1 rounded-xl bg-slate-800/90 hover:bg-cyan-500 hover:text-slate-950 transition-all font-semibold"
+          >
+            Ground Walk
+          </button>
+
+          <button
+            onClick={() => {
+              canyonOrbitRef.current = !canyonOrbitRef.current;
+              setCanyonOrbitActive(canyonOrbitRef.current);
+            }}
+            title="Canyon Orbit: Continuous cinematic 360° rotation"
+            className={`px-2 py-1 rounded-xl transition-all font-semibold ${
+              canyonOrbitActive
+                ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30'
+                : 'bg-slate-800/90 hover:bg-slate-700 text-slate-200'
+            }`}
+          >
+            {canyonOrbitActive ? '⏹ Orbiting' : '🚁 Orbit Tour'}
+          </button>
+
+          {onReturnTo2D && (
+            <button
+              onClick={onReturnTo2D}
+              title="Return to 2D Leaflet Map to select a new area"
+              className="px-2 py-1 rounded-xl bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500 hover:text-slate-950 transition-all font-semibold flex items-center gap-1"
+            >
+              <span>🗺️ 2D Map</span>
+            </button>
+          )}
+
+          <div className="h-3 w-[1px] bg-slate-700 mx-1" />
+
+          {/* MQTT Real-time Telemetry Badge */}
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono text-[10px]">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>MQTT {mqttStatus?.port || 1883}</span>
+            <span className="text-slate-400 font-normal">({mqttStatus?.messageCount ?? 1} pkts)</span>
+          </div>
+        </div>
+
+        {/* Bottom Game Controls Hint Badge */}
+        {gameControlsActive && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none bg-slate-950/80 backdrop-blur-md px-3 py-1 rounded-full border border-slate-700/60 text-[10px] text-slate-300 shadow-xl flex items-center gap-2">
+            <span className="text-cyan-400 font-bold">GAME CONTROLS:</span>
+            <span>
+              <kbd className="px-1 py-0.5 bg-slate-800 rounded text-cyan-300 font-mono">W</kbd>
+              <kbd className="px-1 py-0.5 bg-slate-800 rounded text-cyan-300 font-mono">A</kbd>
+              <kbd className="px-1 py-0.5 bg-slate-800 rounded text-cyan-300 font-mono">S</kbd>
+              <kbd className="px-1 py-0.5 bg-slate-800 rounded text-cyan-300 font-mono">D</kbd> Move
+            </span>
+            <span>•</span>
+            <span>
+              <kbd className="px-1 py-0.5 bg-slate-800 rounded text-cyan-300 font-mono">SPACE</kbd> Up
+            </span>
+            <span>
+              <kbd className="px-1 py-0.5 bg-slate-800 rounded text-cyan-300 font-mono">C</kbd> Down
+            </span>
+            <span>•</span>
+            <span>
+              <kbd className="px-1 py-0.5 bg-slate-800 rounded text-cyan-300 font-mono">SHIFT</kbd> Turbo Boost
+            </span>
+            <span>•</span>
+            <span>Right-click / Drag to Look</span>
+          </div>
+        )}
       </div>
     );
   }

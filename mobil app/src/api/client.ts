@@ -1,7 +1,13 @@
 import axios, { AxiosInstance } from 'axios';
 import { Incident, Alert, SafetyInfo, DeviceRegistration } from '@/types';
 import { isMockDataEnabled, mockIncidents, mockAlerts, mockSafetyInfo } from '@/mocks';
-import { getOrCreateClientId } from '@/storage';
+import {
+  getOrCreateClientId,
+  getAuthToken,
+  setAuthToken,
+  setAuthUser,
+  clearAuth,
+} from '@/storage';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 const DEFAULT_TIMEOUT = 15000;
@@ -32,6 +38,10 @@ export class ApiClient {
     this.instance.interceptors.request.use((config) => {
       const clientId = getOrCreateClientId();
       config.headers['X-Client-Id'] = clientId;
+      const token = getAuthToken();
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
       return config;
     });
   }
@@ -217,6 +227,47 @@ export class ApiClient {
       return response.data;
     } catch (e) {
       return { registered: false };
+    }
+  }
+
+  // SHARED AUTHENTICATION WITH WEBSITE & SAME DATABASE
+  async sendOtp(phone: string): Promise<{ success: boolean; message: string; devOtp?: string }> {
+    return this.requestWithRetry(async () => {
+      const response = await this.instance.post('/api/auth/send-otp', { phone });
+      return response.data;
+    });
+  }
+
+  async verifyOtp(
+    phone: string,
+    code: string,
+    name?: string
+  ): Promise<{ success: boolean; token: string; user: any }> {
+    return this.requestWithRetry(async () => {
+      const response = await this.instance.post('/api/auth/verify-otp', { phone, code, name });
+      if (response.data.token && response.data.user) {
+        setAuthToken(response.data.token);
+        setAuthUser(response.data.user);
+      }
+      return response.data;
+    });
+  }
+
+  async getMe(): Promise<{ success: boolean; user: any }> {
+    return this.requestWithRetry(async () => {
+      const response = await this.instance.get('/api/auth/me');
+      if (response.data.user) {
+        setAuthUser(response.data.user);
+      }
+      return response.data;
+    });
+  }
+
+  logout(): void {
+    try {
+      this.instance.post('/api/auth/logout').catch(() => {});
+    } finally {
+      clearAuth();
     }
   }
 }

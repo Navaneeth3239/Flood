@@ -207,7 +207,35 @@ export function recordSubmissionTimestamp(): void {
   setItem(STORAGE_KEYS.LAST_SUBMISSION_TIME, Date.now().toString());
 }
 
+// Authentication session handling
+export function getAuthToken(): string | null {
+  return getItem(STORAGE_KEYS.AUTH_TOKEN);
+}
+
+export function setAuthToken(token: string): void {
+  setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+}
+
+export function getAuthUser(): { id: string; phone: string; name?: string; role?: string } | null {
+  try {
+    const raw = getItem('floodwatch_auth_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setAuthUser(user: any): void {
+  setItem('floodwatch_auth_user', JSON.stringify(user));
+}
+
+export function clearAuth(): void {
+  removeItem(STORAGE_KEYS.AUTH_TOKEN);
+  removeItem('floodwatch_auth_user');
+}
+
 // Data wipe for user privacy compliance
 export function clearAllLocalUserData(): void {
   Object.values(STORAGE_KEYS).forEach((k) => removeItem(k));
+  removeItem('floodwatch_auth_user');
 }
