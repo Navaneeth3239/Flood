@@ -5,6 +5,58 @@ import {
   deleteLayer,
   toggleLayer,
 } from '../services/terrainService.js';
+import { db } from '../config/db.js';
+
+export function getCachedTerrainTile(req, res) {
+  try {
+    const { url } = req.query;
+    if (!url) return res.status(400).json({ success: false, error: 'URL query parameter required.' });
+
+    const row = db.prepare('SELECT content_type, data_base64 FROM terrain_cache WHERE url = ?').get(url);
+    if (!row) {
+      return res.status(404).json({ success: false, hit: false, message: 'Tile not cached.' });
+    }
+
+    const buffer = Buffer.from(row.data_base64, 'base64');
+    res.setHeader('Content-Type', row.content_type || 'application/octet-stream');
+    res.setHeader('X-Terrain-Cache', 'HIT');
+    return res.status(200).send(buffer);
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+export function storeTerrainTile(req, res) {
+  try {
+    const { url, content_type, data_base64, size_bytes } = req.body;
+    if (!url || !data_base64) {
+      return res.status(400).json({ success: false, error: 'URL and data_base64 required.' });
+    }
+
+    const id = `tc-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    db.prepare(`
+      INSERT OR REPLACE INTO terrain_cache (id, url, content_type, data_base64, size_bytes, created_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now'))
+    `).run(id, url, content_type || 'application/octet-stream', data_base64, size_bytes || data_base64.length);
+
+    return res.status(201).json({ success: true, message: 'Terrain tile cached in database.', id });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+export function clearTerrainCache(req, res) {
+  try {
+    const info = db.prepare('DELETE FROM terrain_cache').run();
+    return res.status(200).json({
+      success: true,
+      message: '3D Terrain database cache cleared successfully.',
+      deletedCount: info.changes,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
 
 export async function uploadTerrainLayer(req, res) {
   try {

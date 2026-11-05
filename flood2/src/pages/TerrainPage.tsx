@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  ChevronLeft,
   ChevronRight,
+  Layers,
 } from 'lucide-react';
 
 import { Station, Reading, TerrainLayerItem, SoilLayerItem } from '@/types';
@@ -490,12 +490,8 @@ export const TerrainPage: React.FC = () => {
           {/* MAIN 3D WORKSPACE WITH LEFT, MAIN, RIGHT & BOTTOM PANELS */}
           <div className="flex-1 flex gap-3 min-h-0 relative overflow-hidden">
             {/* LEFT PANEL: GIS LAYERS, DEM, SRTM30, VEM, TIM, SOIL TYPE, UPLOADS (HIDDEN IN FULL SCREEN MODE) */}
-            {!isFullscreen && (
-              <div
-                className={`transition-all duration-300 flex-shrink-0 z-30 ${
-                  showLeftPanel ? 'w-72 sm:w-80' : 'w-0 -ml-4 opacity-0 pointer-events-none hidden'
-                }`}
-              >
+            {!isFullscreen && showLeftPanel && (
+              <div className="transition-all duration-300 flex-shrink-0 z-30 w-72 sm:w-80">
                 <LayerControlPanel
                   layers={layers}
                   onToggleLayer={handleToggleLayer}
@@ -506,20 +502,21 @@ export const TerrainPage: React.FC = () => {
                   layerOpacities={layerOpacities}
                   onOpacityChange={handleOpacityChange}
                   soilLayers={soilLayers}
+                  onClose={() => setShowLeftPanel(false)}
                 />
               </div>
             )}
 
-            {/* Toggle button for left panel - hidden in fullscreen mode, positioned to avoid header overlap */}
-            {!isFullscreen && (
+            {/* Expand button for left panel - only visible when panel is collapsed AND not in fullscreen mode */}
+            {!isFullscreen && !showLeftPanel && (
               <button
-                onClick={() => setShowLeftPanel(!showLeftPanel)}
-                title={showLeftPanel ? 'Collapse Layer Panel' : 'Expand Layer Panel'}
-                className={`absolute top-2 z-40 p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-cyan-400 border border-cyan-500/30 shadow-xl transition-all duration-300 ${
-                  showLeftPanel ? 'left-[18.5rem] sm:left-[20.5rem]' : 'left-2'
-                }`}
+                onClick={() => setShowLeftPanel(true)}
+                title="Open 3D GIS Layers Panel"
+                className="absolute top-3 left-3 z-30 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-cyan-400 border border-cyan-500/30 shadow-xl backdrop-blur-md transition-all text-xs font-semibold hover:border-cyan-400/60"
               >
-                {showLeftPanel ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                <Layers className="w-4 h-4 text-cyan-400" />
+                <span>GIS Layers</span>
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             )}
 

@@ -94,7 +94,7 @@ app.use('/api', areaRoutes);
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'healthy',
-    system: 'SCMS Flood Prediction & 3D GIS Digital Twin Backend',
+    system: 'Flood Prediction & 3D GIS Digital Twin Backend',
     activeWsClients: clients.size,
     timestamp: new Date().toISOString(),
   });

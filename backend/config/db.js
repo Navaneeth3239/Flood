@@ -150,6 +150,15 @@ export function initDatabase() {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS terrain_cache (
+      id TEXT PRIMARY KEY,
+      url TEXT UNIQUE NOT NULL,
+      content_type TEXT,
+      data_base64 TEXT,
+      size_bytes INTEGER,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS soil_types (
       code TEXT PRIMARY KEY,
       name TEXT NOT NULL,

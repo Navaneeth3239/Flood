@@ -17,6 +17,7 @@ import {
   Info,
   Trash2,
   Layers3,
+  X,
 } from 'lucide-react';
 import { TerrainLayerItem, TerrainLayerType, SoilLayerItem } from '@/types';
 import { UploadLayerModal } from './UploadLayerModal';
@@ -51,6 +52,7 @@ interface LayerControlPanelProps {
   onOpacityChange: (layerKey: string, opacity: number) => void;
   // Soil Layers
   soilLayers: SoilLayerItem[];
+  onClose?: () => void;
 }
 
 export const LayerControlPanel: React.FC<LayerControlPanelProps> = ({
@@ -63,6 +65,7 @@ export const LayerControlPanel: React.FC<LayerControlPanelProps> = ({
   layerOpacities,
   onOpacityChange,
   soilLayers,
+  onClose,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'layers' | 'datasets' | 'soil'>('layers');
@@ -100,6 +103,16 @@ export const LayerControlPanel: React.FC<LayerControlPanelProps> = ({
           >
             {collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
           </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              title="Close 3D Layers Panel"
+              className="p-1 rounded text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors ml-0.5"
+              aria-label="Close 3D Layers Panel"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
