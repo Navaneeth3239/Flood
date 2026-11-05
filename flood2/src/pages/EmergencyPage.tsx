@@ -410,9 +410,9 @@ export const EmergencyPage: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {contacts.map((contact) => (
+            {contacts.map((contact, idx) => (
               <div
-                key={contact.id}
+                key={contact.id || `contact-${idx}`}
                 className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/60 text-xs space-y-1.5"
               >
                 <div className="flex items-center justify-between">
@@ -456,9 +456,9 @@ export const EmergencyPage: React.FC = () => {
           </div>
 
           <div className="space-y-3">
-            {incidents.map((inc) => (
+            {incidents.map((inc, idx) => (
               <div
-                key={inc.id}
+                key={inc.id || (inc as any)._id || `inc-${idx}`}
                 className="p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-900/40 text-xs space-y-2 hover:border-slate-300 transition-colors"
               >
                 <div className="flex items-start justify-between gap-3">

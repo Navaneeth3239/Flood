@@ -1,6 +1,9 @@
 import {
   Station,
   Reading,
+  ReadingTrend,
+  DataSource,
+  DataQuality,
   Alert,
   Prediction,
   Incident,
@@ -43,6 +46,133 @@ let mutableReadings = [...mockReadings];
 
 const delay = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms));
 
+export function normalizeStation(raw: any, index: number = 0): Station {
+  if (!raw) {
+    return {
+      id: `STN-${index}`,
+      name: `Station ${index + 1}`,
+      code: `STN-${index}`,
+      riverBasin: 'General Basin',
+      latitude: 11.0,
+      longitude: 76.9,
+      elevation: 400,
+      status: 'online',
+      batteryLevel: 95,
+      signalRssi: -70,
+      signalSnr: 9.0,
+      lastSeen: new Date().toISOString(),
+      firmwareVersion: 'v2.4.0',
+      sensorHealth: {
+        waterLevelSensor: 'healthy',
+        rainGauge: 'healthy',
+        soilMoistureSensor: 'healthy',
+        weatherSensor: 'healthy',
+      },
+      thresholds: {
+        normalMax: 6.5,
+        watchMax: 8.0,
+        warningMax: 9.5,
+        dangerMax: 11.0,
+      },
+    };
+  }
+
+  const id = String(raw.id || raw.sensor_id || raw.sensorId || `STN-${index}`);
+  const name = String(raw.name || raw.location_name || raw.locationName || raw.sensor_id || id);
+  const code = String(raw.code || raw.sensor_id || raw.sensorId || id);
+  const riverBasin = String(raw.riverBasin || raw.river_basin || raw.basin || 'General Basin');
+
+  return {
+    id,
+    name,
+    code,
+    riverBasin,
+    latitude: Number(raw.latitude ?? 11.0168),
+    longitude: Number(raw.longitude ?? 76.9558),
+    elevation: Number(raw.elevation ?? 411),
+    status: raw.status || 'online',
+    batteryLevel: Number(raw.batteryLevel ?? raw.battery_level ?? 95),
+    signalRssi: raw.signalRssi ?? raw.signal_rssi ?? -70,
+    signalSnr: raw.signalSnr ?? raw.signal_snr ?? 9.0,
+    lastSeen: raw.lastSeen || raw.last_seen || raw.timestamp || new Date().toISOString(),
+    firmwareVersion: raw.firmwareVersion || raw.firmware_version || 'v2.4.0',
+    sensorHealth: raw.sensorHealth || raw.sensor_health || {
+      waterLevelSensor: 'healthy',
+      rainGauge: 'healthy',
+      soilMoistureSensor: 'healthy',
+      weatherSensor: 'healthy',
+    },
+    thresholds: raw.thresholds || {
+      normalMax: Number(raw.threshold_normal_max ?? 6.5),
+      watchMax: Number(raw.threshold_watch_max ?? 8.0),
+      warningMax: Number(raw.threshold_warning_max ?? 9.5),
+      dangerMax: Number(raw.threshold_danger_max ?? 11.0),
+    },
+    ...(raw.soil_type || raw.soilType ? { soilType: raw.soil_type || raw.soilType } : {}),
+  };
+}
+
+export function normalizeReading(raw: any, index: number = 0): Reading {
+  if (!raw) {
+    return {
+      id: `rd-${index}-${Date.now()}`,
+      stationId: '',
+      timestamp: new Date().toISOString(),
+      waterLevel: 0,
+      rainfall: 0,
+      soilMoisture: 0,
+      temperature: null,
+      humidity: null,
+      flowRate: null,
+      trend: 'steady',
+      source: 'sensor',
+      dataQuality: 'good',
+    };
+  }
+
+  const id = String(raw.id || `rd-${index}-${Date.now()}`);
+  const stationId = String(raw.stationId || raw.sensor_id || raw.station_id || raw.sensorId || '');
+  const trend: ReadingTrend =
+    raw.trend === 'rising' || raw.trend === 'falling' || raw.trend === 'steady'
+      ? raw.trend
+      : 'steady';
+  const source: DataSource = raw.source === 'mock' ? 'mock' : 'sensor';
+  const dataQuality: DataQuality =
+    raw.dataQuality === 'suspect' || raw.dataQuality === 'degraded' || raw.dataQuality === 'missing'
+      ? raw.dataQuality
+      : 'good';
+
+  return {
+    id,
+    stationId,
+    timestamp: raw.timestamp || new Date().toISOString(),
+    waterLevel:
+      raw.waterLevel != null
+        ? Number(raw.waterLevel)
+        : raw.water_level != null
+        ? Number(raw.water_level)
+        : null,
+    rainfall: raw.rainfall != null ? Number(raw.rainfall) : null,
+    soilMoisture:
+      raw.soilMoisture != null
+        ? Number(raw.soilMoisture)
+        : raw.soil_moisture != null
+        ? Number(raw.soil_moisture)
+        : null,
+    temperature: raw.temperature != null ? Number(raw.temperature) : null,
+    humidity: raw.humidity != null ? Number(raw.humidity) : null,
+    flowRate:
+      raw.flowRate != null
+        ? Number(raw.flowRate)
+        : raw.flow_rate != null
+        ? Number(raw.flow_rate)
+        : null,
+    trend,
+    source,
+    dataQuality,
+  };
+}
+
 export const apiClient = {
   // STATIONS / SENSORS
   async getStations(): Promise<Station[]> {
@@ -52,14 +182,16 @@ export const apiClient = {
         if (res.ok) {
           const data = await res.json();
           const items = Array.isArray(data) ? data : (data.stations || data.sensors || []);
-          if (items.length > 0) return items;
+          if (items.length > 0) {
+            return items.map((s: any, idx: number) => normalizeStation(s, idx));
+          }
         }
       } catch (err) {
         console.warn('[API] Backend unreachable for /stations, using local data fallback.', err);
       }
     }
     await delay(80);
-    return [...mutableStations];
+    return mutableStations.map((s, idx) => normalizeStation(s, idx));
   },
 
   async getStation(id: string): Promise<Station> {
@@ -68,7 +200,8 @@ export const apiClient = {
         const res = await fetch(`${API_BASE_URL}/stations/${id}`);
         if (res.ok) {
           const data = await res.json();
-          return data.station || data.sensor || data;
+          const s = data.station || data.sensor || data;
+          if (s) return normalizeStation(s, 0);
         }
       } catch (err) {
         console.warn(`[API] Backend unreachable for /stations/${id}, using local data fallback.`, err);
@@ -77,7 +210,7 @@ export const apiClient = {
     await delay(60);
     const stn = mutableStations.find((s) => s.id === id);
     if (!stn) throw new Error('Station not found');
-    return { ...stn };
+    return normalizeStation(stn, 0);
   },
 
   async createStation(station: Omit<Station, 'id'>): Promise<Station> {
@@ -147,14 +280,16 @@ export const apiClient = {
         if (res.ok) {
           const data = await res.json();
           const items = Array.isArray(data) ? data : (data.readings || []);
-          if (items.length > 0) return items;
+          if (items.length > 0) {
+            return items.map((r: any, idx: number) => normalizeReading(r, idx));
+          }
         }
       } catch (err) {
         console.warn('[API] Backend unreachable for /readings, using local fallback.', err);
       }
     }
     await delay(100);
-    let list = [...mutableReadings];
+    let list = mutableReadings.map((r, idx) => normalizeReading(r, idx));
     if (params?.stationId) list = list.filter((r) => r.stationId === params.stationId);
     if (params?.limit) list = list.slice(0, params.limit);
     return list;

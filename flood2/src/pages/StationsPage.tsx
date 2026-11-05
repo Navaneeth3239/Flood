@@ -284,12 +284,13 @@ export const StationsPage: React.FC = () => {
             Registered Hydrometric Stations ({stations.length})
           </h2>
 
-          {stations.map((stn) => {
-            const isSelected = selectedStation?.id === stn.id;
+          {stations.map((stn, idx) => {
+            const stnId = String(stn.id || (stn as any).sensor_id || `station-reg-${idx}`);
+            const isSelected = (selectedStation?.id || (selectedStation as any)?.sensor_id) === stnId;
 
             return (
               <div
-                key={stn.id}
+                key={stnId}
                 onClick={() => handleSelectStation(stn)}
                 className={`p-3.5 rounded-xl border text-xs cursor-pointer transition-all ${
                   isSelected
@@ -586,7 +587,7 @@ export const StationsPage: React.FC = () => {
                     Telemetry Hardware Subsystems Health
                   </span>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                    {Object.entries(selectedStation.sensorHealth).map(([sensorKey, status]) => (
+                    {Object.entries(selectedStation.sensorHealth || {}).map(([sensorKey, status]) => (
                       <div
                         key={sensorKey}
                         className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between"

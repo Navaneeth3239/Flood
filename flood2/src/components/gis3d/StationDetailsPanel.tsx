@@ -34,8 +34,8 @@ export const StationDetailsPanel: React.FC<StationDetailsPanelProps> = ({
   const wl = reading?.waterLevel ?? 0;
   const rf = reading?.rainfall ?? 0;
   const sm = reading?.soilMoisture ?? 0;
-  const soilType = (station as any).soil_type || 'Clay';
-  const isClay = soilType.toLowerCase() === 'clay';
+  const soilType = (station as any).soil_type || (station as any).soilType || 'Clay';
+  const isClay = String(soilType || 'Clay').toLowerCase() === 'clay';
 
   let riskLevel: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' = 'GREEN';
   let riskBadge = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800';

@@ -54,12 +54,21 @@ export async function registerController(req, res) {
       return res.status(400).json({ success: false, error: 'Mobile phone number is required.' });
     }
 
-    // Check if user already exists with this email
-    const existing = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?)').get(email);
+    // Check if user already exists with this email or phone
+    const existing = db
+      .prepare('SELECT id, email, phone FROM users WHERE (email IS NOT NULL AND LOWER(email) = LOWER(?)) OR (phone IS NOT NULL AND phone = ?)')
+      .get(email, phone);
+
     if (existing) {
+      if (existing.email && existing.email.toLowerCase() === email) {
+        return res.status(400).json({
+          success: false,
+          error: 'An account with this email already exists. Please log in.',
+        });
+      }
       return res.status(400).json({
         success: false,
-        error: 'An account with this email already exists. Please log in.',
+        error: 'An account with this mobile phone number already exists. Please log in.',
       });
     }
 

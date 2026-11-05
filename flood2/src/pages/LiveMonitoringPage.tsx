@@ -91,19 +91,34 @@ export const LiveMonitoringPage: React.FC = () => {
   // Extract basins for filter
   const basins = useMemo(() => {
     const set = new Set<string>();
-    stations.forEach((s) => set.add(s.riverBasin));
-    return Array.from(set);
+    stations.forEach((s) => {
+      const b = (s?.riverBasin || (s as any)?.river_basin || '').trim();
+      if (b) set.add(b);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [stations]);
 
-  // Filtered stations
+  // Filtered stations with robust null/undefined safety & case-insensitivity
   const filteredStations = useMemo(() => {
+    const query = (searchQuery ?? '').trim().toLowerCase();
     return stations.filter((stn) => {
+      if (!stn) return false;
+      const name = String(stn.name || (stn as any).location_name || '').toLowerCase();
+      const code = String(stn.code || (stn as any).sensor_id || stn.id || '').toLowerCase();
+      const riverBasin = String(stn.riverBasin || (stn as any).river_basin || '').toLowerCase();
+
       const matchesSearch =
-        stn.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        stn.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        stn.riverBasin.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesBasin = selectedBasin === 'all' || stn.riverBasin === selectedBasin;
-      return matchesSearch && matchesBasin;
+        !query ||
+        name.includes(query) ||
+        code.includes(query) ||
+        riverBasin.includes(query);
+
+      const stnBasin = String(stn.riverBasin || (stn as any).river_basin || '').trim();
+      const matchesBasin =
+        selectedBasin === 'all' ||
+        stnBasin.toLowerCase() === selectedBasin.trim().toLowerCase();
+
+      return Boolean(matchesSearch && matchesBasin);
     });
   }, [stations, searchQuery, selectedBasin]);
 
@@ -275,16 +290,21 @@ export const LiveMonitoringPage: React.FC = () => {
         />
       ) : viewMode === 'cards' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {filteredStations.map((stn) => {
-            const reading = latestReadingsMap.get(stn.id);
+          {filteredStations.map((stn, idx) => {
+            const stnId = stn.id || (stn as any).sensor_id || `station-${idx}`;
+            const reading = latestReadingsMap.get(stnId) || latestReadingsMap.get(stn.id);
             let severity = 'normal';
+            const dangerThresh = stn.thresholds?.dangerMax ?? 11.0;
+            const warningThresh = stn.thresholds?.warningMax ?? 9.5;
+            const watchThresh = stn.thresholds?.watchMax ?? 8.0;
+
             if (stn.status === 'offline') {
               severity = 'unknown';
-            } else if (reading?.waterLevel && reading.waterLevel >= stn.thresholds.dangerMax) {
+            } else if (reading?.waterLevel != null && reading.waterLevel >= dangerThresh) {
               severity = 'danger';
-            } else if (reading?.waterLevel && reading.waterLevel >= stn.thresholds.warningMax) {
+            } else if (reading?.waterLevel != null && reading.waterLevel >= warningThresh) {
               severity = 'warning';
-            } else if (reading?.waterLevel && reading.waterLevel >= stn.thresholds.watchMax) {
+            } else if (reading?.waterLevel != null && reading.waterLevel >= watchThresh) {
               severity = 'watch';
             }
 
@@ -292,7 +312,7 @@ export const LiveMonitoringPage: React.FC = () => {
 
             return (
               <div
-                key={stn.id}
+                key={stnId}
                 className={`rounded-2xl border bg-white dark:bg-slate-800/90 p-5 shadow-xs flex flex-col justify-between transition-all hover:shadow-md ${sev.border}`}
               >
                 <div>
@@ -370,13 +390,13 @@ export const LiveMonitoringPage: React.FC = () => {
                       <span className="text-[11px]">Hardware Subsystems:</span>
                       <div className="flex items-center gap-2">
                         <span className="flex items-center gap-1" title="Hydro Radar Gauge">
-                          WL {renderHealthIndicator(stn.sensorHealth.waterLevelSensor)}
+                          WL {renderHealthIndicator(stn.sensorHealth?.waterLevelSensor || 'healthy')}
                         </span>
                         <span className="flex items-center gap-1" title="Tipping Bucket Rain Gauge">
-                          RG {renderHealthIndicator(stn.sensorHealth.rainGauge)}
+                          RG {renderHealthIndicator(stn.sensorHealth?.rainGauge || 'healthy')}
                         </span>
                         <span className="flex items-center gap-1" title="TDR Soil Probe">
-                          SM {renderHealthIndicator(stn.sensorHealth.soilMoistureSensor)}
+                          SM {renderHealthIndicator(stn.sensorHealth?.soilMoistureSensor || 'healthy')}
                         </span>
                       </div>
                     </div>
@@ -414,16 +434,21 @@ export const LiveMonitoringPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                {filteredStations.map((stn) => {
-                  const reading = latestReadingsMap.get(stn.id);
+                {filteredStations.map((stn, idx) => {
+                  const stnId = stn.id || (stn as any).sensor_id || `table-stn-${idx}`;
+                  const reading = latestReadingsMap.get(stnId) || latestReadingsMap.get(stn.id);
                   let severity = 'normal';
+                  const dangerThresh = stn.thresholds?.dangerMax ?? 11.0;
+                  const warningThresh = stn.thresholds?.warningMax ?? 9.5;
+                  const watchThresh = stn.thresholds?.watchMax ?? 8.0;
+
                   if (stn.status === 'offline') {
                     severity = 'unknown';
-                  } else if (reading?.waterLevel && reading.waterLevel >= stn.thresholds.dangerMax) {
+                  } else if (reading?.waterLevel != null && reading.waterLevel >= dangerThresh) {
                     severity = 'danger';
-                  } else if (reading?.waterLevel && reading.waterLevel >= stn.thresholds.warningMax) {
+                  } else if (reading?.waterLevel != null && reading.waterLevel >= warningThresh) {
                     severity = 'warning';
-                  } else if (reading?.waterLevel && reading.waterLevel >= stn.thresholds.watchMax) {
+                  } else if (reading?.waterLevel != null && reading.waterLevel >= watchThresh) {
                     severity = 'watch';
                   }
 
@@ -431,7 +456,7 @@ export const LiveMonitoringPage: React.FC = () => {
 
                   return (
                     <tr
-                      key={stn.id}
+                      key={stnId}
                       className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                     >
                       <td className="px-4 py-3">

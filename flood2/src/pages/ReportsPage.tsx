@@ -217,11 +217,15 @@ export const ReportsPage: React.FC = () => {
             className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-sky-500"
           >
             <option value="all">All River Basins & Stations</option>
-            {stations.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
+            {stations.map((s, idx) => {
+              const sId = String(s.id || (s as any).sensor_id || `rep-stn-${idx}`);
+              const sName = s.name || (s as any).location_name || sId;
+              return (
+                <option key={sId} value={sId}>
+                  {sName}
+                </option>
+              );
+            })}
           </select>
         </div>
       </div>

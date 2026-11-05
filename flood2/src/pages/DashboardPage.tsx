@@ -121,9 +121,11 @@ export const DashboardPage: React.FC = () => {
   // High risk stations count
   const highRiskStationsCount = useMemo(() => {
     return stations.filter((stn) => {
-      const latest = latestReadingsMap.get(stn.id);
-      if (!latest || latest.waterLevel === null) return false;
-      return latest.waterLevel >= stn.thresholds.warningMax;
+      const stnId = stn.id || (stn as any).sensor_id;
+      const latest = latestReadingsMap.get(stnId) || latestReadingsMap.get(stn.id);
+      if (!latest || latest.waterLevel === null || isNaN(latest.waterLevel)) return false;
+      const warningThresh = stn.thresholds?.warningMax ?? 9.5;
+      return latest.waterLevel >= warningThresh;
     }).length;
   }, [stations, latestReadingsMap]);
 
@@ -142,10 +144,12 @@ export const DashboardPage: React.FC = () => {
     let peak = -Infinity;
     let stationName = '';
     stations.forEach((stn) => {
-      const r = latestReadingsMap.get(stn.id);
-      if (r && r.waterLevel !== null && r.waterLevel > peak) {
+      const stnId = stn.id || (stn as any).sensor_id;
+      const r = latestReadingsMap.get(stnId) || latestReadingsMap.get(stn.id);
+      if (r && r.waterLevel !== null && !isNaN(r.waterLevel) && r.waterLevel > peak) {
         peak = r.waterLevel;
-        stationName = stn.name.split('-')[0].trim();
+        const rawName = stn.name || (stn as any).location_name || 'Station';
+        stationName = rawName.split('-')[0].trim();
       }
     });
     return peak === -Infinity ? null : { value: peak, station: stationName };
@@ -269,11 +273,16 @@ export const DashboardPage: React.FC = () => {
               className="text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-sky-500"
               aria-label="Select monitoring station for hydrograph"
             >
-              {stations.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.riverBasin})
-                </option>
-              ))}
+              {stations.map((s, idx) => {
+                const sId = String(s.id || (s as any).sensor_id || `station-opt-${idx}`);
+                const sName = s.name || (s as any).location_name || sId;
+                const sBasin = s.riverBasin || (s as any).river_basin || 'General Basin';
+                return (
+                  <option key={sId} value={sId}>
+                    {sName} ({sBasin})
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -420,22 +429,27 @@ export const DashboardPage: React.FC = () => {
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                {stations.map((stn) => {
-                  const latest = latestReadingsMap.get(stn.id);
+                {stations.map((stn, idx) => {
+                  const stnId = String(stn.id || (stn as any).sensor_id || `dashboard-marker-${idx}`);
+                  const latest = latestReadingsMap.get(stnId) || latestReadingsMap.get(stn.id);
                   let sevColor = severityMarkerColors.normal;
+                  const dangerThresh = stn.thresholds?.dangerMax ?? 11.0;
+                  const warningThresh = stn.thresholds?.warningMax ?? 9.5;
+                  const watchThresh = stn.thresholds?.watchMax ?? 8.0;
+
                   if (stn.status === 'offline') {
                     sevColor = severityMarkerColors.unknown;
-                  } else if (latest?.waterLevel && latest.waterLevel >= stn.thresholds.dangerMax) {
+                  } else if (latest?.waterLevel != null && latest.waterLevel >= dangerThresh) {
                     sevColor = severityMarkerColors.danger;
-                  } else if (latest?.waterLevel && latest.waterLevel >= stn.thresholds.warningMax) {
+                  } else if (latest?.waterLevel != null && latest.waterLevel >= warningThresh) {
                     sevColor = severityMarkerColors.warning;
-                  } else if (latest?.waterLevel && latest.waterLevel >= stn.thresholds.watchMax) {
+                  } else if (latest?.waterLevel != null && latest.waterLevel >= watchThresh) {
                     sevColor = severityMarkerColors.watch;
                   }
 
                   return (
                     <Marker
-                      key={stn.id}
+                      key={stnId}
                       position={[stn.latitude, stn.longitude]}
                       icon={createColorIcon(sevColor)}
                     >
@@ -508,11 +522,12 @@ export const DashboardPage: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {alerts.slice(0, 3).map((alert) => {
+              {alerts.slice(0, 3).map((alert, idx) => {
+                const alertId = String(alert.id || (alert as any)._id || `alert-${idx}`);
                 const sev = getSeverityClasses(alert.severity);
                 return (
                   <div
-                    key={alert.id}
+                    key={alertId}
                     className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${sev.bg} ${sev.border}`}
                   >
                     <div className="flex items-start gap-3">
@@ -568,11 +583,12 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             <div className="space-y-3">
-              {stations.slice(0, 4).map((stn) => {
-                const isLowBattery = stn.batteryLevel < 20;
+              {stations.slice(0, 4).map((stn, idx) => {
+                const stnId = String(stn.id || (stn as any).sensor_id || `health-stn-${idx}`);
+                const isLowBattery = (stn.batteryLevel ?? 100) < 20;
                 return (
                   <div
-                    key={stn.id}
+                    key={stnId}
                     className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 text-xs flex items-center justify-between"
                   >
                     <div className="min-w-0 pr-2">

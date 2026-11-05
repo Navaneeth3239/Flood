@@ -238,16 +238,16 @@ export const LeafletAreaSelector: React.FC<LeafletAreaSelectorProps> = ({
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
-    const q = searchQuery.toLowerCase().trim();
+    const q = (searchQuery ?? '').toLowerCase().trim();
     // Match presets
     const foundPreset = REGION_PRESETS.find(
       (p) =>
-        p.name.toLowerCase().includes(q) ||
-        (q.includes('coimbatore') && p.name.includes('Coimbatore')) ||
-        (q.includes('siruvani') && p.name.includes('Siruvani')) ||
-        (q.includes('bhavani') && p.name.includes('Bhavani')) ||
-        (q.includes('garhwal') && p.name.includes('Garhwal')) ||
-        (q.includes('chennai') && p.name.includes('Chennai'))
+        (p?.name ?? '').toLowerCase().includes(q) ||
+        (q.includes('coimbatore') && (p?.name ?? '').includes('Coimbatore')) ||
+        (q.includes('siruvani') && (p?.name ?? '').includes('Siruvani')) ||
+        (q.includes('bhavani') && (p?.name ?? '').includes('Bhavani')) ||
+        (q.includes('garhwal') && (p?.name ?? '').includes('Garhwal')) ||
+        (q.includes('chennai') && (p?.name ?? '').includes('Chennai'))
     );
 
     if (foundPreset) {
@@ -257,13 +257,15 @@ export const LeafletAreaSelector: React.FC<LeafletAreaSelectorProps> = ({
       return;
     }
 
-    // Match stations
-    const foundStation = stations.find(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        s.riverBasin.toLowerCase().includes(q) ||
-        s.id.toLowerCase().includes(q)
-    );
+    // Match stations with defensive property checks
+    const foundStation = stations.find((s) => {
+      if (!s) return false;
+      const sName = String(s.name || (s as any).location_name || '').toLowerCase();
+      const sBasin = String(s.riverBasin || (s as any).river_basin || '').toLowerCase();
+      const sId = String(s.id || (s as any).sensor_id || '').toLowerCase();
+      const sCode = String(s.code || '').toLowerCase();
+      return sName.includes(q) || sBasin.includes(q) || sId.includes(q) || sCode.includes(q);
+    });
 
     if (foundStation) {
       const area = calculateBoundsFromPoints(

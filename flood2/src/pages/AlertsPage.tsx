@@ -171,12 +171,13 @@ export const AlertsPage: React.FC = () => {
             />
           ) : (
             <div className="space-y-3">
-              {alerts.map((alert) => {
+              {alerts.map((alert, idx) => {
+                const alertId = String(alert.id || (alert as any)._id || `alert-item-${idx}`);
                 const sev = getSeverityClasses(alert.severity);
 
                 return (
                   <div
-                    key={alert.id}
+                    key={alertId}
                     className={`rounded-2xl border p-4 shadow-xs transition-all ${sev.bg} ${sev.border}`}
                   >
                     <div className="flex items-start justify-between gap-3">

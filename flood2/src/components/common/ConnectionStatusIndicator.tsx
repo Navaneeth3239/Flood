@@ -68,7 +68,7 @@ export const ConnectionStatusIndicator: React.FC = () => {
             Telemetry Connection Controls
           </div>
           <p className="text-slate-500 dark:text-slate-400 mb-2">
-            Status: <span className="font-bold">{state.toUpperCase()}</span>
+            Status: <span className="font-bold">{String(state || 'unknown').toUpperCase()}</span>
           </p>
           <div className="flex flex-col gap-1">
             <button

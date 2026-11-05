@@ -116,11 +116,16 @@ export const PredictionPage: React.FC = () => {
             onChange={(e) => setSelectedStationId(e.target.value)}
             className="text-xs sm:text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-slate-800 dark:text-slate-200 font-medium focus:ring-2 focus:ring-sky-500 shadow-xs"
           >
-            {stations.map((stn) => (
-              <option key={stn.id} value={stn.id}>
-                {stn.name} ({stn.riverBasin})
-              </option>
-            ))}
+            {stations.map((stn, idx) => {
+              const stnId = String(stn.id || (stn as any).sensor_id || `pred-stn-${idx}`);
+              const stnName = stn.name || (stn as any).location_name || stnId;
+              const stnBasin = stn.riverBasin || (stn as any).river_basin || 'General Basin';
+              return (
+                <option key={stnId} value={stnId}>
+                  {stnName} ({stnBasin})
+                </option>
+              );
+            })}
           </select>
         </div>
 

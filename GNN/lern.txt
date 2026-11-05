@@ -1,0 +1,9 @@
+
+**Setup:**
+uv init --no-workspace
+uv venv
+.venv/scripts/activate
+uv add fastAPI
+uv add uvicorn
+uvicorn main:app --reload
+uvicorn _File_:_app_ --reload

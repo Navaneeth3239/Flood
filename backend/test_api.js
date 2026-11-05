@@ -59,13 +59,14 @@ async function runTests() {
 
   // 4a. Register with full details: name, password, age, dob, mail, number, address
   const testEmail = `test_${Date.now()}@floodwatch.org`;
+  const testPhone = `+919${Math.floor(100000000 + Math.random() * 900000000)}`;
   const regRes = await request('POST', '/api/auth/register', {
     name: 'Navaneeth B',
     mail: testEmail,
     password: 'SafePassword123!',
     age: 25,
     dob: '2001-04-18',
-    number: '+919443322110',
+    number: testPhone,
     address: '42 Western Ghats Observatory, Coimbatore, Tamil Nadu',
   });
   console.log('4a. POST /api/auth/register:', regRes.status, 'Registered User:', regRes.body.user?.email, 'Age:', regRes.body.user?.age);

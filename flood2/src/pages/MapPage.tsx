@@ -247,22 +247,31 @@ export const MapPage: React.FC = () => {
 
           {/* Hydrometric Station Markers */}
           {showStations &&
-            stations.map((stn) => {
-              const reading = latestReadingsMap.get(stn.id);
+            stations.map((stn, idx) => {
+              const stnId = String(stn.id || (stn as any).sensor_id || `map-stn-marker-${idx}`);
+              const reading = latestReadingsMap.get(stnId) || latestReadingsMap.get(stn.id);
               let sevColor = severityMarkerColors.normal;
+              const dangerThresh = stn.thresholds?.dangerMax ?? 11.0;
+              const warningThresh = stn.thresholds?.warningMax ?? 9.5;
+              const watchThresh = stn.thresholds?.watchMax ?? 8.0;
+
               if (stn.status === 'offline') {
                 sevColor = severityMarkerColors.unknown;
-              } else if (reading?.waterLevel && reading.waterLevel >= stn.thresholds.dangerMax) {
+              } else if (reading?.waterLevel != null && reading.waterLevel >= dangerThresh) {
                 sevColor = severityMarkerColors.danger;
-              } else if (reading?.waterLevel && reading.waterLevel >= stn.thresholds.warningMax) {
+              } else if (reading?.waterLevel != null && reading.waterLevel >= warningThresh) {
                 sevColor = severityMarkerColors.warning;
-              } else if (reading?.waterLevel && reading.waterLevel >= stn.thresholds.watchMax) {
+              } else if (reading?.waterLevel != null && reading.waterLevel >= watchThresh) {
                 sevColor = severityMarkerColors.watch;
               }
 
+              const stnName = stn.name || (stn as any).location_name || stnId;
+              const stnCode = stn.code || (stn as any).sensor_id || stnId;
+              const stnBasin = stn.riverBasin || (stn as any).river_basin || 'General Basin';
+
               return (
                 <Marker
-                  key={stn.id}
+                  key={stnId}
                   position={[stn.latitude, stn.longitude]}
                   icon={createColorIcon(sevColor)}
                   eventHandlers={{
@@ -275,12 +284,12 @@ export const MapPage: React.FC = () => {
                   <Popup>
                     <div className="text-xs p-1 min-w-[200px]">
                       <div className="flex items-center justify-between gap-2 border-b pb-1 mb-1.5">
-                        <span className="font-bold text-slate-900">{stn.name}</span>
+                        <span className="font-bold text-slate-900">{stnName}</span>
                         <span className="text-[10px] uppercase font-bold text-sky-600 bg-sky-50 px-1 py-0.5 rounded">
-                          {stn.code}
+                          {stnCode}
                         </span>
                       </div>
-                      <p className="text-slate-500 text-[11px] mb-1">{stn.riverBasin}</p>
+                      <p className="text-slate-500 text-[11px] mb-1">{stnBasin}</p>
                       <div className="space-y-1 text-slate-700">
                         <div className="flex justify-between">
                           <span>Water Level:</span>
@@ -293,14 +302,14 @@ export const MapPage: React.FC = () => {
                           <span className="font-semibold">{formatRainfall(reading?.rainfall)}</span>
                         </div>
                         <div className="flex justify-between text-[11px] text-slate-400 pt-1 border-t">
-                          <span>Battery: {stn.batteryLevel}%</span>
+                          <span>Battery: {stn.batteryLevel ?? 100}%</span>
                           <span>{reading ? timeAgo(reading.timestamp) : 'No data'}</span>
                         </div>
                       </div>
 
                       {/* Direct 3D GIS Action Button */}
                       <Link
-                        to={`/terrain?lat=${stn.latitude}&lng=${stn.longitude}&name=${encodeURIComponent(stn.name)}&stationId=${stn.id}`}
+                        to={`/terrain?lat=${stn.latitude}&lng=${stn.longitude}&name=${encodeURIComponent(stnName)}&stationId=${stnId}`}
                         className="mt-2.5 flex items-center justify-center gap-1.5 w-full py-1.5 px-2 bg-sky-600 hover:bg-sky-700 text-white rounded font-medium text-[11px] shadow-xs transition-colors"
                       >
                         <Mountain className="w-3.5 h-3.5" />
@@ -314,32 +323,37 @@ export const MapPage: React.FC = () => {
 
           {/* Community Reported Incident Markers */}
           {showIncidents &&
-            incidents.map((inc) => (
-              <Marker
-                key={inc.id}
-                position={[inc.location.latitude, inc.location.longitude]}
-                icon={createColorIcon('#dc2626')}
-              >
-                <Popup>
-                  <div className="text-xs p-1 max-w-[220px]">
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-red-100 text-red-800">
-                      Community Incident ({inc.priority})
-                    </span>
-                    <h4 className="font-bold text-slate-900 mt-1">{inc.title}</h4>
-                    <p className="text-slate-600 text-[11px] mt-1">{inc.description}</p>
-                    <p className="text-slate-400 text-[10px] mt-1">Status: {inc.status}</p>
+            incidents.map((inc, idx) => {
+              const incId = String(inc.id || (inc as any)._id || `inc-marker-${idx}`);
+              const lat = inc.location?.latitude ?? 11.0;
+              const lng = inc.location?.longitude ?? 76.9;
+              return (
+                <Marker
+                  key={incId}
+                  position={[lat, lng]}
+                  icon={createColorIcon('#dc2626')}
+                >
+                  <Popup>
+                    <div className="text-xs p-1 max-w-[220px]">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-red-100 text-red-800">
+                        Community Incident ({inc.priority})
+                      </span>
+                      <h4 className="font-bold text-slate-900 mt-1">{inc.title}</h4>
+                      <p className="text-slate-600 text-[11px] mt-1">{inc.description}</p>
+                      <p className="text-slate-400 text-[10px] mt-1">Status: {inc.status}</p>
 
-                    <Link
-                      to={`/terrain?lat=${inc.location.latitude}&lng=${inc.location.longitude}&name=${encodeURIComponent(inc.title)}`}
-                      className="mt-2 flex items-center justify-center gap-1.5 w-full py-1 px-2 bg-red-600 hover:bg-red-700 text-white rounded font-medium text-[11px] text-center transition-colors"
-                    >
-                      <Mountain className="w-3.5 h-3.5" />
-                      <span>Inspect Terrain in 3D</span>
-                    </Link>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
+                      <Link
+                        to={`/terrain?lat=${lat}&lng=${lng}&name=${encodeURIComponent(inc.title || 'Incident')}`}
+                        className="mt-2 flex items-center justify-center gap-1.5 w-full py-1 px-2 bg-red-600 hover:bg-red-700 text-white rounded font-medium text-[11px] text-center transition-colors"
+                      >
+                        <Mountain className="w-3.5 h-3.5" />
+                        <span>Inspect Terrain in 3D</span>
+                      </Link>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
         </MapContainer>
 
         {/* Floating Layer Control Panel */}
